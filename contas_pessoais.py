@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import streamlit as st
 
 
@@ -240,62 +239,69 @@ class ContasPessoaisAnalyzer:
         return result
 
     # ── Gráficos ──────────────────────────────────────────────────
-    def chart_flow(
-        self, df_daily: pd.DataFrame, monthly_expenses: float
+    def chart_monthly_comparison(
+        self, df: pd.DataFrame, start: datetime, end: datetime
     ) -> go.Figure:
-        fig = make_subplots(rows=1, cols=1, specs=[[{"secondary_y": True}]])
+        """
+        Uma barra por mês dentro do período selecionado.
+        Meses sem dados aparecem como zero (barra vazia).
+        """
+        # Gera todos os meses do intervalo como rótulos
+        months: List[str] = []
+        totals: List[float] = []
 
-        x_labels = [
-            f"{row['data_formatada']}<br>"
-            f"<span style='font-size:11px;color:#8B95A5'>{row['dia_semana']}</span>"
-            for _, row in df_daily.iterrows()
-        ]
+        current = start.replace(day=1)
+        while current <= end:
+            label = f"{MONTHS_PT[current.month].capitalize()}/{str(current.year)[2:]}"
+            months.append(label)
 
-        fmt = lambda v: f"<b>{fmt_brl(v)}</b>"
+            if not df.empty:
+                mask = (
+                    (df["data"].dt.year == current.year) &
+                    (df["data"].dt.month == current.month)
+                )
+                totals.append(df[mask]["valor"].sum())
+            else:
+                totals.append(0.0)
 
-        fig.add_trace(
+            # Avança um mês
+            current = (current.replace(day=1) + timedelta(days=32)).replace(day=1)
+
+        # Destaca o mês atual com cor diferente
+        this_month = today.strftime(f"{MONTHS_PT[today.month].capitalize()}/{str(today.year)[2:]}")
+        colors = ["#2A7A9B" if m != this_month else "#F59E0B" for m in months]
+
+        fig = go.Figure(
             go.Bar(
-                x=x_labels,
-                y=df_daily["total_saidas"],
-                name="Saídas do Dia",
-                marker=dict(
-                    color=df_daily["total_saidas"],
-                    colorscale=[[0, "#E8F4F8"], [0.5, "#4FB3D4"], [1, "#2A7A9B"]],
-                ),
-                text=[fmt(v) if v > 0 else "" for v in df_daily["total_saidas"]],
+                x=months,
+                y=totals,
+                marker_color=colors,
+                text=[fmt_brl(v) if v > 0 else "" for v in totals],
                 textposition="outside",
-                width=0.65,
-            ),
-            secondary_y=False,
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=x_labels,
-                y=df_daily["saldo_acumulado"],
-                name="Saldo Acumulado",
-                mode="lines+markers",
-                line=dict(color="#DC2626", width=3),
-                marker=dict(size=10, color="#DC2626", line=dict(color="white", width=2)),
-            ),
-            secondary_y=True,
+                width=0.55,
+            )
         )
 
         fig.update_layout(
-            title=f"Gastos do Mês Atual (minha parte): {fmt_brl(monthly_expenses)}",
-            xaxis=dict(showgrid=False),
+            title="Comparativo de Gastos por Mês (minha parte)",
+            xaxis=dict(title="", showgrid=False),
             yaxis=dict(
-                title="Saídas Diárias (R$)", tickprefix="R$ ",
+                title="Total (R$)", tickprefix="R$ ",
                 showgrid=True, gridcolor="#EBEBEB", nticks=6,
             ),
-            yaxis2=dict(
-                title="Saldo Acumulado (R$)", tickprefix="R$ ",
-                showgrid=False, nticks=6,
-            ),
-            height=520,
+            height=460,
             plot_bgcolor="#FAFBFC",
             paper_bgcolor="#FFFFFF",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            margin=dict(t=60, b=40),
+            showlegend=False,
+            annotations=[
+                dict(
+                    x=0.5, y=1.08, xref="paper", yref="paper",
+                    text="🟡 mês atual",
+                    showarrow=False,
+                    font=dict(size=12, color="#8B95A5"),
+                )
+            ],
         )
         return fig
 
@@ -440,7 +446,6 @@ if excluded:
     df_all = df_all[~df_all["nome"].isin(excluded)].copy()
 
 df_period = analyzer.filter_by_range(df_all, start_date, end_date)
-df_daily = analyzer.calculate_daily_totals(df_period, start_date, end_date)
 monthly_expenses = analyzer.calculate_monthly_expenses(df_all, today)
 
 # ── YoY ───────────────────────────────────────────────────────────
@@ -529,9 +534,9 @@ with col4:
 
 st.divider()
 
-# ── Gráfico de fluxo diário ───────────────────────────────────────
-fig_flow = analyzer.chart_flow(df_daily, monthly_expenses)
-st.plotly_chart(fig_flow, use_container_width=True)
+# ── Comparativo mensal ────────────────────────────────────────────
+fig_monthly = analyzer.chart_monthly_comparison(df_all, start_date, end_date)
+st.plotly_chart(fig_monthly, use_container_width=True)
 
 # ── Gráfico de fornecedores ───────────────────────────────────────
 if not df_period.empty:
