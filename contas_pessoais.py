@@ -391,9 +391,13 @@ today = datetime.now(tz=BR_TZ).replace(
 
 with st.sidebar:
     st.header("⚙️ Configurações")
+    # Último dia do mês atual (funciona em qualquer mês/dia)
+    first_of_next = (today.replace(day=1) + timedelta(days=32)).replace(day=1)
+    last_of_month = first_of_next - timedelta(days=1)
+
     date_range = st.date_input(
         "Período de análise",
-        value=(today.date(), today.replace(day=28).date()),
+        value=(today.date(), last_of_month.date()),
         min_value=(today - timedelta(days=730)).date(),
         max_value=(today + timedelta(days=90)).date(),
         help="Selecione o intervalo de datas para visualizar os gastos.",
