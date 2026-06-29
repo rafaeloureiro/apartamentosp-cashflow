@@ -389,31 +389,39 @@ today = datetime.now(tz=BR_TZ).replace(
     hour=0, minute=0, second=0, microsecond=0, tzinfo=None
 )
 
+first_of_next = (today.replace(day=1) + timedelta(days=32)).replace(day=1)
+last_of_month = first_of_next - timedelta(days=1)
+min_date = (today - timedelta(days=730)).date()
+max_date = (today + timedelta(days=90)).date()
+
 with st.sidebar:
     st.header("⚙️ Configurações")
-    # Último dia do mês atual (funciona em qualquer mês/dia)
-    first_of_next = (today.replace(day=1) + timedelta(days=32)).replace(day=1)
-    last_of_month = first_of_next - timedelta(days=1)
-
-    date_range = st.date_input(
-        "Período de análise",
-        value=(today.date(), last_of_month.date()),
-        min_value=(today - timedelta(days=730)).date(),
-        max_value=(today + timedelta(days=90)).date(),
-        help="Selecione o intervalo de datas para visualizar os gastos.",
+    st.markdown("**📅 Período de análise**")
+    start_input = st.date_input(
+        "De",
+        value=today.date(),
+        min_value=min_date,
+        max_value=max_date,
+        key="start_date",
     )
+    end_input = st.date_input(
+        "Até",
+        value=last_of_month.date(),
+        min_value=min_date,
+        max_value=max_date,
+        key="end_date",
+    )
+    if end_input < start_input:
+        st.error("⚠️ A data final deve ser maior ou igual à inicial.")
+        st.stop()
     st.caption(
         "💡 Cache renovado a cada 10 min. "
         "Para forçar atualização pressione **F5**."
     )
     exclusion_placeholder = st.empty()
 
-if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-    start_date = datetime.combine(date_range[0], datetime.min.time())
-    end_date = datetime.combine(date_range[1], datetime.min.time())
-else:
-    start_date = today
-    end_date = today + timedelta(days=6)
+start_date = datetime.combine(start_input, datetime.min.time())
+end_date = datetime.combine(end_input, datetime.min.time())
 
 # ── Busca de dados ────────────────────────────────────────────────
 with st.spinner("Conectando ao Trello…"):
